@@ -20,6 +20,7 @@ class TestOnlineRecognition(unittest.TestCase):
     def test_online_recognition(self):
         self.socketIO.on('result', self.assertMessageHasCorrectSchema)
         self.send_chunks()
+        self.socketIO.wait(seconds=5)
         self.assertEquals(self.expected_responses + 2, self.received_responses)
 
     def send_chunks(self):

@@ -1,6 +1,6 @@
 import base64
 import struct
-import zmq.green as zmq
+import zmq
 import re
 import uuid
 from cloudasr.messages import MasterResponseMessage
