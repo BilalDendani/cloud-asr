@@ -27,10 +27,7 @@ def chunks(path):
         if len(frames) == 0:
             break
 
-        yield frames_to_base64(frames)
-
-def frames_to_base64(frames):
-    return base64.b64encode(frames)
+        yield frames
 
 def log(message):
     time = datetime.datetime.now().time()
@@ -49,10 +46,11 @@ if __name__ == "__main__":
     frame_rate = int(sys.argv[5])
 
     socket = create_socket(server, port)
-    socket.emit('begin', {'model': model})
+    socket.emit('begin', model)
     for chunk in chunks(path):
-        socket.emit('chunk', {'chunk': chunk, 'frame_rate': frame_rate})
+        socket.emit('chunk', frame_rate, bytearray(chunk))
         socket.wait_for_callbacks()
-    socket.emit('end', {})
+    socket.emit('end')
+    socket.wait(1)
     socket.wait_for_callbacks()
     socket.wait_for_callbacks()
