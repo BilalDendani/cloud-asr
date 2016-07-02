@@ -65,10 +65,10 @@ def transcribe():
         return jsonify({"status": "error", "message": "Missing item %s" % e.args[0]}), 400
 
 @socketio.on('begin')
-def begin_online_recognition(message):
+def begin_online_recognition(model):
     try:
         worker = create_frontend_worker(os.environ['MASTER_ADDR'])
-        worker.connect_to_worker(message["model"])
+        worker.connect_to_worker(model)
 
         session["worker"] = worker
         session["connected"] = True
@@ -77,13 +77,14 @@ def begin_online_recognition(message):
         worker.close()
 
 @socketio.on('chunk')
-def recognize_chunk(message):
+def recognize_chunk(frame_rate, message):
     try:
         if not session.get("connected", False):
             emit('server_error', {"status": "error", "message": "No worker available"})
             return
 
-        results = session["worker"].recognize_chunk(message["chunk"], message["frame_rate"])
+        results = session["worker"].recognize_chunk(message["chunk"], frame_rate)
+        print >> sys.stderr, results
         for result in results:
             emit('result', result)
     except WorkerInternalError:
@@ -92,13 +93,13 @@ def recognize_chunk(message):
         del session["worker"]
 
 @socketio.on('change_lm')
-def change_lm(message):
+def change_lm(new_lm):
     try:
         if not session.get("connected", False):
             emit('server_error', {"status": "error", "message": "No worker available"})
             return
 
-        results = session["worker"].change_lm(str(message["new_lm"]))
+        results = session["worker"].change_lm(str(new_lm))
         for result in results:
             emit('result', result)
     except WorkerInternalError:
@@ -107,7 +108,7 @@ def change_lm(message):
         del session["worker"]
 
 @socketio.on('end')
-def end_recognition(message):
+def end_recognition():
     if not session.get("connected", False):
         emit('server_error', {"status": "error", "message": "No worker available"})
         return

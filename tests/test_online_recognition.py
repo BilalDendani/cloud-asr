@@ -24,14 +24,14 @@ class TestOnlineRecognition(unittest.TestCase):
         self.assertEquals(self.expected_responses + 2, self.received_responses)
 
     def send_chunks(self):
-        self.socketIO.emit('begin', {'model': 'en-towninfo'})
-        self.socketIO.emit('change_lm', {'new_lm': 'new_lm'})
+        self.socketIO.emit('begin', 'en-towninfo')
+        self.socketIO.emit('change_lm', 'new-lm')
 
         for chunk in self.chunks():
-            self.socketIO.emit('chunk', {'chunk': chunk, 'frame_rate': 16000})
+            self.socketIO.emit('chunk', 16000, {'chunk': chunk})
             self.socketIO.wait_for_callbacks()
 
-        self.socketIO.emit('end', {})
+        self.socketIO.emit('end')
         self.socketIO.wait_for_callbacks()
         self.socketIO.wait_for_callbacks()
         self.socketIO.wait_for_callbacks()
