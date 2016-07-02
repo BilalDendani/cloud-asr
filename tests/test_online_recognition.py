@@ -2,7 +2,6 @@ import os
 import time
 import wave
 import struct
-import base64
 import urllib2
 import unittest
 from jsonschema import validate
@@ -28,7 +27,7 @@ class TestOnlineRecognition(unittest.TestCase):
         self.socketIO.emit('change_lm', 'new-lm')
 
         for chunk in self.chunks():
-            self.socketIO.emit('chunk', 16000, {'chunk': chunk})
+            self.socketIO.emit('chunk', 16000, bytearray(chunk))
             self.socketIO.wait_for_callbacks()
 
         self.socketIO.emit('end')
@@ -46,10 +45,7 @@ class TestOnlineRecognition(unittest.TestCase):
                 break
 
             self.expected_responses += 1
-            yield self.frames_to_base64(frames)
-
-    def frames_to_base64(self, frames):
-        return base64.b64encode(frames)
+            yield frames
 
     def assertMessageHasCorrectSchema(self, message):
         schema = {

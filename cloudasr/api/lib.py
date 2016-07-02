@@ -11,17 +11,15 @@ def create_frontend_worker(master_address):
     master_socket = context.socket(zmq.REQ)
     master_socket.connect(master_address)
     worker_socket = context.socket(zmq.REQ)
-    decoder = Decoder()
     id_generator = lambda: uuid.uuid4().int
 
-    return FrontendWorker(master_socket, worker_socket, decoder, id_generator)
+    return FrontendWorker(master_socket, worker_socket, id_generator)
 
 
 class FrontendWorker:
-    def __init__(self, master_socket, worker_socket, decoder, id_generator):
+    def __init__(self, master_socket, worker_socket, id_generator):
         self.master_socket = master_socket
         self.worker_socket = worker_socket
-        self.decoder = decoder
         self.id_generator = id_generator
         self.id = None
 
@@ -43,8 +41,7 @@ class FrontendWorker:
         self.worker_address = self.get_worker_address_from_master(model)
         self.worker_socket.connect(self.worker_address)
 
-    def recognize_chunk(self, data, frame_rate):
-        chunk = self.decoder.decode(data)
+    def recognize_chunk(self, chunk, frame_rate):
         self.send_request_to_worker(chunk, "ONLINE", frame_rate, has_next = True)
         response = self.read_response_from_worker()
 
@@ -128,11 +125,6 @@ class FrontendWorker:
             'chunk_id': str(uniqId2Int(response.id)),
             'request_id': str(self.id)
         }
-
-class Decoder:
-
-    def decode(self, data):
-        return base64.b64decode(data)
 
 class NoWorkerAvailableError(Exception):
     pass

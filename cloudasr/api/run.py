@@ -77,13 +77,13 @@ def begin_online_recognition(model):
         worker.close()
 
 @socketio.on('chunk')
-def recognize_chunk(frame_rate, message):
+def recognize_chunk(frame_rate, chunk):
     try:
         if not session.get("connected", False):
             emit('server_error', {"status": "error", "message": "No worker available"})
             return
 
-        results = session["worker"].recognize_chunk(message["chunk"], frame_rate)
+        results = session["worker"].recognize_chunk(chunk, frame_rate)
         print >> sys.stderr, results
         for result in results:
             emit('result', result)
