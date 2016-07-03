@@ -17,14 +17,14 @@
         var socket = createSocket(apiUrl);
 
         this.start = function(model) {
-            socket.emit('begin', {'model':model});
+            socket.emit('begin', model);
             recorder.record();
             this.isRecording = true;
             this.onstart();
         };
 
         this.stop = function() {
-            socket.emit('end', {});
+            socket.emit('end');
             recorder.stop();
             this.isRecording = false;
             this.onend();
@@ -32,7 +32,7 @@
 
         this.changeLM = function(newLM) {
             console.log(newLM);
-            socket.emit('change_lm', {'new_lm': newLM});
+            socket.emit('change_lm', newLM);
         }
 
         var handleResult = function(results) {
@@ -52,6 +52,7 @@
 
         function createSocket(apiUrl) {
             socket = io.connect(apiUrl);
+            socket.binaryType = "arraybuffer";
 
             socket.on("connect", function() {
                 console.log("Socket connected");
@@ -92,34 +93,18 @@
         }
 
         function handleChunk(chunk) {
-            socket.emit("chunk", {chunk: encode16BitPcmToBase64(floatTo16BitPcm(chunk[0])), frame_rate: 44100});
+            socket.emit("chunk", 44100, floatTo16BitPcm(chunk[0]));
             recognizer.onchunk(chunk);
         }
 
         function floatTo16BitPcm(chunk) {
-            result = [];
+            result = new Int16Array(chunk.length);
             for( i = 0; i < chunk.length; i++ ) {
                 var s = Math.max(-1, Math.min(1, chunk[i]));
                 result[i] = Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF);
             }
 
-            return result;
-        }
-
-        function encode16BitPcmToBase64(pcm) {
-            chars = []
-            for(i=0; i < pcm.length; i++) {
-                lower = pcm[i] & 255;
-                upper = pcm[i] >> 8;
-                if(upper < 0) {
-                    upper += 256;
-                }
-
-                chars[2*i] = String.fromCharCode(lower);
-                chars[2*i+1] = String.fromCharCode(upper);
-            }
-
-            return btoa(chars.join(""));
+            return result.buffer;
         }
 
         function handleVolume(volume) {
