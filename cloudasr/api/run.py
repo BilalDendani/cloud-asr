@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+import eventlet
+from eventlet.semaphore import Semaphore
+from eventlet.queue import Queue
 from flask import Flask, Response, request, jsonify, stream_with_context, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -67,11 +70,16 @@ def transcribe():
 @socketio.on('begin')
 def begin_online_recognition(model):
     try:
-        worker = create_frontend_worker(os.environ['MASTER_ADDR'])
-        worker.connect_to_worker(model)
+        session["chunk_queue"] = Queue()
+        session["queue_semaphore"] = Semaphore()
+        session["worker_semaphore"] = Semaphore()
 
-        session["worker"] = worker
-        session["connected"] = True
+        with session["worker_semaphore"]:
+            worker = create_frontend_worker(os.environ['MASTER_ADDR'])
+            worker.connect_to_worker(model)
+
+            session["worker"] = worker
+            session["connected"] = True
     except NoWorkerAvailableError:
         emit('server_error', {"status": "error", "message": "No worker available"})
         worker.close()
@@ -79,14 +87,18 @@ def begin_online_recognition(model):
 @socketio.on('chunk')
 def recognize_chunk(frame_rate, chunk):
     try:
-        if not session.get("connected", False):
-            emit('server_error', {"status": "error", "message": "No worker available"})
-            return
+        with session["queue_semaphore"]:
+            session["chunk_queue"].put(chunk)
 
-        results = session["worker"].recognize_chunk(chunk, frame_rate)
-        print >> sys.stderr, results
-        for result in results:
-            emit('result', result)
+        with session["worker_semaphore"]:
+            if not session.get("connected", False):
+                emit('server_error', {"status": "error", "message": "No worker available"})
+                return
+
+            chunk = session["chunk_queue"].get()
+            results = session["worker"].recognize_chunk(chunk, frame_rate)
+            for result in results:
+                emit('result', result)
     except WorkerInternalError:
         emit('server_error', {"status": "error", "message": "Internal error"})
         session["worker"].close()
@@ -95,13 +107,14 @@ def recognize_chunk(frame_rate, chunk):
 @socketio.on('change_lm')
 def change_lm(new_lm):
     try:
-        if not session.get("connected", False):
-            emit('server_error', {"status": "error", "message": "No worker available"})
-            return
+        with session["worker_semaphore"]:
+            if not session.get("connected", False):
+                emit('server_error', {"status": "error", "message": "No worker available"})
+                return
 
-        results = session["worker"].change_lm(str(new_lm))
-        for result in results:
-            emit('result', result)
+            results = session["worker"].change_lm(str(new_lm))
+            for result in results:
+                emit('result', result)
     except WorkerInternalError:
         emit('server_error', {"status": "error", "message": "Internal error"})
         session["worker"].close()
@@ -109,19 +122,24 @@ def change_lm(new_lm):
 
 @socketio.on('end')
 def end_recognition():
-    if not session.get("connected", False):
-        emit('server_error', {"status": "error", "message": "No worker available"})
-        return
+    with session["queue_semaphore"]:
+        while not session["chunk_queue"].empty():
+            eventlet.sleep(0.01)
 
-    results = session["worker"].end_recognition()
-    for result in results:
-        emit('result', result)
+    with session["worker_semaphore"]:
+        if not session.get("connected", False):
+            emit('server_error', {"status": "error", "message": "No worker available"})
+            return
 
-    emit('end', results[-1])
+        results = session["worker"].end_recognition()
+        for result in results:
+            emit('result', result)
 
-    session["worker"].close()
-    session["connected"] = False
-    del session["worker"]
+        emit('end', results[-1])
+
+        session["worker"].close()
+        session["connected"] = False
+        del session["worker"]
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=80)

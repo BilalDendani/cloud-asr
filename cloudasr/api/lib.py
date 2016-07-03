@@ -1,6 +1,6 @@
 import base64
 import struct
-import zmq
+from eventlet.green import zmq
 import re
 import uuid
 from cloudasr.messages import MasterResponseMessage
